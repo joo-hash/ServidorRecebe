@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
@@ -13,41 +15,60 @@ namespace ServidorRecebe
             Socket socketreceber = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.IP);
             EndPoint endereco = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9060);
             byte[] data = new byte[1024];
-            int qtdbytes;
+            int qtdbytes, qtd;
+
+
             String filename;
 
             socketreceber.Bind(endereco);
-
-            // 1. Recebe o nome do arquivo
             qtdbytes = socketreceber.ReceiveFrom(data, ref endereco);
-            filename = Encoding.UTF8.GetString(data, 0, qtdbytes);
-            Console.WriteLine("Arquivo recebido: " + filename);
+            Console.WriteLine(Encoding.ASCII.GetString(data, 0, qtdbytes));
+            filename = Encoding.ASCII.GetString(data, 0, qtdbytes);
 
-            FileStream outfile; // output file
-            outfile = new System.IO.FileStream(filename,
-                                               System.IO.FileMode.Create,
-                                               System.IO.FileAccess.Write);
+            qtdbytes = socketreceber.ReceiveFrom(data, ref endereco);
+            Console.WriteLine(Encoding.ASCII.GetString(data, 0, qtdbytes));
+            qtd = int.Parse(Encoding.ASCII.GetString(data, 0, qtdbytes));
 
-            int chaveCriptografia = 5;
-            int fatorCripto = 18 + chaveCriptografia; // 23
+            FileStream outfile;
 
+            outfile = new System.IO.FileStream(filename, System.IO.FileMode.Create, System.IO.FileAccess.Write);
 
-            qtdbytes = socketreceber.ReceiveFrom(data, ref endereco);                         // 2. Recebe os dados do arquivo criptografados
-
-            String conteudoCriptografado = Encoding.UTF8.GetString(data, 0, qtdbytes);
-
-            for (int i = 0; i < conteudoCriptografado.Length; ++i)
+            for (int i = 0; i < qtd; i++)
             {
+                qtdbytes = socketreceber.ReceiveFrom(data, ref endereco);
+                Console.WriteLine(Encoding.ASCII.GetString(data, 0, qtdbytes));
 
-                char caractereCriptografado = conteudoCriptografado[i];                        // Pega o caractere já montado corretamente da string
-                char caractereDescriptografado = (char)(caractereCriptografado - fatorCripto); // Descriptografa o char
-                outfile.WriteByte((byte)caractereDescriptografado);                            // Converte o char para byte e grava no arquivo
+                int checksum = 0; //
+                for (int j = 0; j < qtdbytes; ++j)
+                {
+                    checksum += data[j];
+                }
+                byte[] bufferChecksum = new byte[20];//
+                int qtdChecksum = socketreceber.ReceiveFrom(bufferChecksum, ref endereco);
+
+                int checksumRecebido = int.Parse(Encoding.ASCII.GetString(bufferChecksum, 0, qtdChecksum));
+
+                Console.WriteLine("Checksum calculado: " + checksum);
+                Console.WriteLine("Checksum recebido: " + checksumRecebido);
+
+                if (checksum != checksumRecebido)
+                {
+                    Console.WriteLine("ERRO: pacote corrompido!");
+                    outfile.Close();
+                    socketreceber.Close();
+                    return;
+                }
+
+                for (int j = 0; j < qtdbytes; ++j)
+                {
+                    outfile.WriteByte(data[j]);
+                }
+
+
             }
-
             outfile.Close();
             socketreceber.Close();
-
-            Console.WriteLine("Arquivo salvo e descriptografado com sucesso!");
+            Console.ReadKey();
         }
     }
 }
